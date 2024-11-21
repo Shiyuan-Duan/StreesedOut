@@ -1,0 +1,6 @@
+module Pods_stressedout {
+  umbrella header "Pods-stressedout-umbrella.h"
+
+  export *
+  module * { export * }
+}
