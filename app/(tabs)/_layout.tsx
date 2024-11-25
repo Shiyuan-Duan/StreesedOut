@@ -1,3 +1,4 @@
+// Add 'devices' to the selections array
 import { Tabs } from 'expo-router';
 import React from 'react';
 import { Platform } from 'react-native';
@@ -46,6 +47,14 @@ export default function TabLayout() {
         options={{
           title: 'Paradigm',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="list.bullet" color={color} />,
+        }}
+      />
+      {/* Add the Devices Tab */}
+      <Tabs.Screen
+        name="devices"
+        options={{
+          title: 'Devices',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="bluetooth.connect" color={color} />,
         }}
       />
     </Tabs>

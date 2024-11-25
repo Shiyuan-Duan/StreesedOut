@@ -10,9 +10,21 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.shiyuan-duan.stressed-out"
+      "bundleIdentifier": "com.shiyuan-duan.stressed-out",
+      "infoPlist": {
+        "NSBluetoothPeripheralUsageDescription": "This app requires Bluetooth to connect to nearby devices.",
+        "NSBluetoothAlwaysUsageDescription": "This app requires Bluetooth to connect and stay connected to devices.",
+        "NSLocationWhenInUseUsageDescription": "This app requires location access to scan for Bluetooth devices."
+      }
     },
     "android": {
+      "permissions": [
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -38,6 +50,7 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "privacy": "public"
   }
 }

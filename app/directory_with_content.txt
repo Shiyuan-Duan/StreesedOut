@@ -11,30 +11,46 @@ app/
     motor-imagery.js
     mental-relaxation.js
     ema-questionnaire.js
+    constants/
+        index.js
+        ble.js
+        api.js
     (tabs)/
         ParadigmSelectionScreen.js
         index.tsx
+        devices.tsx
         _layout.tsx
         explore.tsx
     utils/
         ImageManager.js
+    components/
+        DeviceCard.js
+        AddDeviceModal.js
+    services/
+        bleServices.js
+        ble_characteristics.js
 
 
 Files with '.js' or '.tsx' extensions and their content:
 
 File: /Users/shiyuanduan/Documents/Expo/stressed-out/app/fear-conditioning.js
 ================================================================================
-import React, { useState, useEffect } from 'react';
-import { View, Text, Button, StyleSheet, Image } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Animated, Easing } from 'react-native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import images from './utils/ImageManager'; // Import images from ImageManager.js
 
 export default function FearConditioningScreen() {
+  const navigation = useNavigation();
+
   const [step, setStep] = useState('start'); // Current step: 'start', 'countdown', 'images', 'break', 'end'
   const [countdown, setCountdown] = useState(15); // Countdown timer for 'countdown' step
   const [currentImageIndex, setCurrentImageIndex] = useState(0); // Index of the current image in the set
   const [currentSequenceIndex, setCurrentSequenceIndex] = useState(0); // Index of the current play sequence
   const [imageSet, setImageSet] = useState([]); // Current set of images to display
   const [timeLeft, setTimeLeft] = useState(0); // Timer for 'break' step
+  const [headerVisible, setHeaderVisible] = useState(false); // Controls header visibility
+  const [buttonOpacity] = useState(new Animated.Value(1)); // For button fade-in effect
 
   const IMAGE_DISPLAY_DURATION = 2000; // 2 seconds per image
   const BREAK_DURATION = 10; // 10 seconds break (in seconds)
@@ -47,6 +63,30 @@ export default function FearConditioningScreen() {
     { category: 'Happy', set: 'Set 4' },
     { category: 'Fear', set: 'Set 3' },
   ];
+
+  // Hide or show the navigation header
+  useEffect(() => {
+    navigation.setOptions({
+      headerShown: headerVisible,
+    });
+  }, [headerVisible]);
+
+  // Show header on screen tap and hide after 3 seconds
+  const headerTimeoutRef = useRef(null);
+
+  const handleScreenTap = () => {
+    if (step === 'images') {
+      setHeaderVisible(true);
+
+      if (headerTimeoutRef.current) {
+        clearTimeout(headerTimeoutRef.current);
+      }
+
+      headerTimeoutRef.current = setTimeout(() => {
+        setHeaderVisible(false);
+      }, 3000);
+    }
+  };
 
   // Load the next image set when the sequence changes
   useEffect(() => {
@@ -69,6 +109,7 @@ export default function FearConditioningScreen() {
         } else {
           setStep('images');
           setCurrentImageIndex(0); // Reset the image index
+          setHeaderVisible(false); // Ensure header is hidden
         }
         break;
 
@@ -98,74 +139,120 @@ export default function FearConditioningScreen() {
     return () => clearTimeout(timer); // Clear the timer when the step changes
   }, [step, countdown, currentImageIndex, timeLeft]);
 
+  // Clean up header timeout when component unmounts
+  useEffect(() => {
+    return () => {
+      if (headerTimeoutRef.current) {
+        clearTimeout(headerTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Fade-in animation for the start button
+  useEffect(() => {
+    Animated.timing(buttonOpacity, {
+      toValue: 1,
+      duration: 1000,
+      easing: Easing.inOut(Easing.ease),
+      useNativeDriver: true,
+    }).start();
+  }, []);
+
   // Shuffle an array
   function shuffle(array) {
     return array.sort(() => Math.random() - 0.5);
   }
 
-
   return (
     <View style={styles.container}>
-      <View style={styles.content}>
-        {step === 'start' && (
-          <View style={styles.buttonContainer}>
-            <Button title="Start" onPress={() => setStep('countdown')} />
-          </View>
-        )}
-        {step === 'countdown' && (
-          <Text style={styles.text}>Starting in... {countdown} seconds</Text>
-        )}
-        {step === 'images' && imageSet.length > 0 && (
-          <Image
-            source={imageSet[currentImageIndex]}
-            style={styles.image}
-            resizeMode="contain"
-          />
-        )}
-        {step === 'break' && (
-          <Text style={styles.text}>Take a break... {timeLeft} seconds remaining</Text>
-        )}
-        {step === 'end' && (
-          <Text style={styles.text}>The session is complete. Thank you!</Text>
-        )}
-      </View>
+      <TouchableOpacity style={styles.fullScreenTouchable} onPress={handleScreenTap} activeOpacity={1}>
+        <View style={styles.content}>
+          {step === 'start' && (
+            <Animated.View style={[styles.buttonContainer, { opacity: buttonOpacity }]}>
+              <TouchableOpacity style={styles.startButton} onPress={() => setStep('countdown')}>
+                <Text style={styles.buttonText}>Start</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          )}
+          {step === 'countdown' && (
+            <Text style={styles.countdownText}>Starting in... {countdown} seconds</Text>
+          )}
+          {step === 'images' && imageSet.length > 0 && (
+            <Image
+              source={imageSet[currentImageIndex]}
+              style={styles.image}
+              resizeMode="contain"
+            />
+          )}
+          {step === 'break' && (
+            <Text style={styles.breakText}>Take a break... {timeLeft} seconds remaining</Text>
+          )}
+          {step === 'end' && (
+            <Text style={styles.endText}>The session is complete. Thank you!</Text>
+          )}
+        </View>
+      </TouchableOpacity>
     </View>
   );
 }
+
 const styles = StyleSheet.create({
-    container: {
-      flex: 1,
-      // Align items to the center horizontally but not vertically
-      alignItems: 'center',
-    //   backgroundColor: '#f8f9fa',
-    backgroundColor: 'black',
-      
-    },
-    content: {
-      width: '100%',
-      alignItems: 'center',
-      // Optional: Add a base top margin for all content
-      marginTop: 20,
-      
-    },
-    text: {
-      fontSize: 24,
-      fontWeight: 'bold',
-      color: '#333',
-      textAlign: 'center',
-      marginTop: 50, // Add marginTop if you want text to have a larger top margin
-    },
-    image: {
-      width: 300,
-      height: 300,
-      marginTop: 50, // Larger top margin for images
-      marginBottom: 20,
-    },
-    buttonContainer: {
-      marginTop: 50, // Larger top margin for the button
-    },
-  });
-  
+  container: {
+    flex: 1,
+    backgroundColor: 'black', // Ensure background is completely black
+  },
+  fullScreenTouchable: {
+    flex: 1,
+    width: '100%',
+  },
+  content: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center', // Center content vertically
+  },
+  countdownText: {
+    fontSize: 30,
+    fontWeight: 'bold',
+    color: '#FFFFFF', // White text for visibility on black background
+    textAlign: 'center',
+  },
+  breakText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    textAlign: 'center',
+  },
+  endText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    textAlign: 'center',
+  },
+  image: {
+    width: '100%',
+    height: '100%',
+  },
+  buttonContainer: {
+    // Optional styling for the button container
+  },
+  startButton: {
+    backgroundColor: '#4682B4', // Steel blue color
+    paddingVertical: 15,
+    paddingHorizontal: 30,
+    borderRadius: 8,
+    elevation: 3, // Add shadow for Android
+    shadowColor: '#000', // Shadow for iOS
+    shadowOffset: { width: 0, height: 2 }, // Shadow for iOS
+    shadowOpacity: 0.25, // Shadow for iOS
+    shadowRadius: 3.84, // Shadow for iOS
+  },
+  buttonText: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+});
+
 ================================================================================
 
 File: /Users/shiyuanduan/Documents/Expo/stressed-out/app/+not-found.tsx
@@ -562,50 +649,117 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Vibration,
 } from 'react-native';
+import { Audio } from 'expo-av'; // Import Audio from expo-av
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function MISTScreen() {
-  const [step, setStep] = useState('introduction'); // 'introduction', 'task', 'completion'
+  // State variables
+  const [step, setStep] = useState('introduction'); // 'introduction', 'task', 'completion', 'questionnaire'
+  const [conditionIndex, setConditionIndex] = useState(0); // 0: withoutTimeConstraints, 1: withTimeConstraints
+  const [difficultyIndex, setDifficultyIndex] = useState(0); // 0: low, 1: medium, 2: high
+  const [trialIndex, setTrialIndex] = useState(0); // 0 to 4
+  const [equationIndex, setEquationIndex] = useState(0); // 0 to 4
+  const [problems, setProblems] = useState([]);
   const [currentProblem, setCurrentProblem] = useState(null);
   const [userAnswer, setUserAnswer] = useState('');
-  const [problemIndex, setProblemIndex] = useState(0);
-  const [problems, setProblems] = useState([]);
-  const [score, setScore] = useState({ correct: 0, incorrect: 0 });
+  const [startTime, setStartTime] = useState(null);
+  const [results, setResults] = useState([]);
+  const [timerRef, setTimerRef] = useState(null);
+  const [timeRemaining, setTimeRemaining] = useState(null);
 
-  // Generate problems upon starting the task
+  // New state variables for questionnaire
+  const [stressResponse, setStressResponse] = useState(null);
+  const [taskStartTime, setTaskStartTime] = useState(null); // To record the start time of the task
+
+  // Sound and vibration
+  const [sound, setSound] = useState();
+
+  const conditions = ['withoutTimeConstraints', 'withTimeConstraints'];
+  const difficulties = ['low', 'medium', 'high'];
+
+  // Generate problems upon starting a new trial
   useEffect(() => {
     if (step === 'task') {
-      const generatedProblems = generateProblems();
+      const generatedProblems = generateProblemsForTrial(difficulties[difficultyIndex]);
       setProblems(generatedProblems);
-      setCurrentProblem(generatedProblems[0]);
+      setEquationIndex(0);
     }
-  }, [step]);
+  }, [step, trialIndex, difficultyIndex, conditionIndex]);
 
-  const generateProblems = () => {
+  // Update currentProblem when equationIndex or problems change
+  useEffect(() => {
+    if (problems.length === 0) return; // Guard clause to prevent premature execution
+
+    if (equationIndex < problems.length) {
+      setCurrentProblem(problems[equationIndex]);
+      setUserAnswer(''); // Clear previous user input
+      setStartTime(new Date()); // Reset start time for the new problem
+
+      if (conditions[conditionIndex] === 'withTimeConstraints') {
+        resetTimer();
+      }
+    } else {
+      // All problems in the trial are completed
+      setCurrentProblem(null);
+      if (conditions[conditionIndex] === 'withTimeConstraints') {
+        clearTimer();
+      }
+      moveToNextTrialOrDifficulty();
+    }
+  }, [equationIndex, problems]);
+
+  // Cleanup function for timers and sounds
+  useEffect(() => {
+    return () => {
+      clearTimer();
+      if (sound) {
+        sound.unloadAsync();
+      }
+    };
+  }, []);
+
+  const clearTimer = () => {
+    if (timerRef) {
+      clearInterval(timerRef);
+      setTimerRef(null);
+    }
+  };
+
+  const generateProblemsForTrial = (difficultyLevel) => {
     const generatedProblems = [];
-    const totalProblems = 10; // Adjust the number of problems as needed
-
-    for (let i = 0; i < totalProblems; i++) {
-      if (i < totalProblems / 2) {
-        // Low stress problems
-        generatedProblems.push(generateLowStressProblem());
-      } else {
-        // Medium stress problems
-        generatedProblems.push(generateMediumStressProblem());
+    const equationsPerTrial = 5; // 5 equations per trial
+    for (let i = 0; i < equationsPerTrial; i++) {
+      switch (difficultyLevel) {
+        case 'low':
+          generatedProblems.push(generateLowStressProblem());
+          break;
+        case 'medium':
+          generatedProblems.push(generateMediumStressProblem());
+          break;
+        case 'high':
+          generatedProblems.push(generateHighStressProblem());
+          break;
+        default:
+          break;
       }
     }
-
     return generatedProblems;
   };
 
   const generateLowStressProblem = () => {
-    // Two operations (addition/subtraction) with single-digit numbers
+    // Two operations (addition/subtraction) with single-digit numbers, ensuring positive answers
     const operations = ['+', '-'];
-    const num1 = getRandomInt(1, 9);
-    const num2 = getRandomInt(1, 9);
-    const op1 = operations[Math.floor(Math.random() * operations.length)];
+    let num1 = getRandomInt(1, 9);
+    let num2 = getRandomInt(1, 9);
+    let op1 = operations[Math.floor(Math.random() * operations.length)];
+
+    // Adjust to prevent negative answers
+    if (op1 === '-' && num1 < num2) {
+      [num1, num2] = [num2, num1]; // Swap numbers
+    }
 
     const expression = `${num1} ${op1} ${num2}`;
     const answer = eval(expression);
@@ -614,16 +768,63 @@ export default function MISTScreen() {
   };
 
   const generateMediumStressProblem = () => {
-    // Three operations (addition/subtraction/multiplication) with double and single-digit numbers
+    // Three operations (addition/subtraction/multiplication) with double and single-digit numbers, ensuring positive answers
     const operations = ['+', '-', '*'];
-    const num1 = getRandomInt(10, 99);
-    const num2 = getRandomInt(1, 9);
-    const num3 = getRandomInt(1, 9);
-    const op1 = operations[Math.floor(Math.random() * operations.length)];
-    const op2 = operations[Math.floor(Math.random() * operations.length)];
+    let num1 = getRandomInt(10, 99);
+    let num2 = getRandomInt(1, 9);
+    let num3 = getRandomInt(1, 9);
+    let op1 = operations[Math.floor(Math.random() * operations.length)];
+    let op2 = operations[Math.floor(Math.random() * operations.length)];
 
-    const expression = `${num1} ${op1} ${num2} ${op2} ${num3}`;
+    // Build expression step by step to ensure positive intermediate results
+    let expression = `${num1} ${op1} ${num2}`;
+    let intermediateResult = eval(expression);
+
+    if (op2 === '-') {
+      // Ensure the result does not become negative
+      if (intermediateResult < num3) {
+        [intermediateResult, num3] = [num3, intermediateResult];
+        expression = `${num3} - ${intermediateResult}`;
+      } else {
+        expression += ` - ${num3}`;
+      }
+    } else {
+      expression += ` ${op2} ${num3}`;
+    }
+
     const answer = eval(expression);
+
+    return { expression, answer };
+  };
+
+  const generateHighStressProblem = () => {
+    // Four operations (addition/subtraction/multiplication/division) with double and single-digit numbers, ensuring positive answers
+    const operations = ['+', '-', '*', '/'];
+    let num1 = getRandomInt(10, 99);
+    let num2 = getRandomInt(1, 9);
+    let num3 = getRandomInt(1, 9);
+    let num4 = getRandomInt(1, 9);
+    let op1 = operations[Math.floor(Math.random() * operations.length)];
+    let op2 = operations[Math.floor(Math.random() * operations.length)];
+    let op3 = operations[Math.floor(Math.random() * operations.length)];
+
+    // Avoid division by zero and ensure positive answers
+    if (op1 === '/' && num2 === 0) num2 = getRandomInt(1, 9);
+    if (op2 === '/' && num3 === 0) num3 = getRandomInt(1, 9);
+    if (op3 === '/' && num4 === 0) num4 = getRandomInt(1, 9);
+
+    let expression = `${num1} ${op1} ${num2} ${op2} ${num3} ${op3} ${num4}`;
+    let answer = eval(expression);
+
+    // Adjust to prevent negative answers and invalid results
+    if (answer < 0 || isNaN(answer) || !isFinite(answer)) {
+      return generateHighStressProblem(); // Regenerate problem
+    }
+
+    // Round answer to 2 decimal places if necessary
+    if (typeof answer === 'number') {
+      answer = Math.round((answer + Number.EPSILON) * 100) / 100;
+    }
 
     return { expression, answer };
   };
@@ -634,7 +835,7 @@ export default function MISTScreen() {
   };
 
   const handleInputChange = (text) => {
-    // Regular expression to match valid numeric input (including negative numbers)
+    // Regular expression to match valid numeric input (positive integers)
     const numericRegex = /^-?\d*\.?\d*$/;
 
     if (numericRegex.test(text)) {
@@ -642,41 +843,187 @@ export default function MISTScreen() {
     }
   };
 
-  const handleAnswerSubmit = () => {
+  const handleAnswerSubmit = async () => {
     if (userAnswer.trim() === '') {
       Alert.alert('Input Required', 'Please enter your answer.');
       return;
     }
 
     const correctAnswer = currentProblem.answer;
-    const userAnswerNum = parseFloat(userAnswer);
+    let userAnswerNum = parseFloat(userAnswer);
 
     if (isNaN(userAnswerNum)) {
       Alert.alert('Invalid Input', 'Please enter a valid number.');
       return;
     }
 
-    if (userAnswerNum === correctAnswer) {
-      setScore((prev) => ({ ...prev, correct: prev.correct + 1 }));
-    } else {
-      setScore((prev) => ({ ...prev, incorrect: prev.incorrect + 1 }));
+    // Round user answer to 2 decimal places if necessary
+    userAnswerNum = Math.round((userAnswerNum + Number.EPSILON) * 100) / 100;
+
+    const isCorrect = userAnswerNum === correctAnswer;
+
+    const endTime = new Date();
+    const timeTaken = (endTime - startTime) / 1000; // Time in seconds
+
+    const problemResult = {
+      condition: conditions[conditionIndex],
+      difficulty: difficulties[difficultyIndex],
+      trial: trialIndex + 1,
+      equation: currentProblem.expression,
+      correctAnswer: correctAnswer,
+      userAnswer: userAnswerNum,
+      isCorrect: isCorrect,
+      timeTaken: timeTaken,
+    };
+
+    setResults((prevResults) => [...prevResults, problemResult]);
+
+    if (!isCorrect) {
+      await triggerFeedback(); // Play sound and vibrate
     }
 
-    setUserAnswer('');
+    // Move to the next equation
+    setEquationIndex((prevIndex) => prevIndex + 1);
+  };
 
-    if (problemIndex < problems.length - 1) {
-      // Move to the next problem
-      const nextIndex = problemIndex + 1;
-      setProblemIndex(nextIndex);
-      setCurrentProblem(problems[nextIndex]);
+  const moveToNextTrialOrDifficulty = () => {
+    if (trialIndex < 4) {
+      // Move to next trial
+      setTrialIndex((prevTrialIndex) => prevTrialIndex + 1);
+    } else if (difficultyIndex < difficulties.length - 1) {
+      // Move to next difficulty level
+      setDifficultyIndex((prevDifficultyIndex) => prevDifficultyIndex + 1);
+      setTrialIndex(0);
+    } else if (conditionIndex < conditions.length - 1) {
+      // Move to next condition
+      setConditionIndex((prevConditionIndex) => prevConditionIndex + 1);
+      setDifficultyIndex(0);
+      setTrialIndex(0);
     } else {
       // Task completed
       setStep('completion');
     }
   };
 
+  const startTimer = () => {
+    clearTimer(); // Clear any existing interval before starting a new one
+
+    // Set time limit per problem, e.g., 10 seconds
+    const timeLimit = 10;
+    setTimeRemaining(timeLimit);
+
+    const timer = setInterval(() => {
+      setTimeRemaining((prevTime) => {
+        if (prevTime <= 1) {
+          clearInterval(timer);
+          setTimerRef(null);
+          handleTimeExpired();
+          return 0;
+        }
+        return prevTime - 1;
+      });
+    }, 1000);
+
+    setTimerRef(timer);
+  };
+
+  const resetTimer = () => {
+    startTimer(); // startTimer() already clears the previous interval
+  };
+
+  const handleTimeExpired = async () => {
+    clearTimer();
+
+    Alert.alert('Time Up', 'You did not answer in time.');
+
+    const correctAnswer = currentProblem.answer;
+
+    const endTime = new Date();
+    const timeTaken = (endTime - startTime) / 1000; // Time in seconds
+
+    const problemResult = {
+      condition: conditions[conditionIndex],
+      difficulty: difficulties[difficultyIndex],
+      trial: trialIndex + 1,
+      equation: currentProblem.expression,
+      correctAnswer: correctAnswer,
+      userAnswer: null,
+      isCorrect: false,
+      timeTaken: timeTaken,
+    };
+
+    setResults((prevResults) => [...prevResults, problemResult]);
+
+    await triggerFeedback(); // Play sound and vibrate
+
+    // Move to the next equation
+    setEquationIndex((prevIndex) => prevIndex + 1);
+  };
+
+  const triggerFeedback = async () => {
+    // Vibrate the device
+    Vibration.vibrate(500); // Vibrate for 500 milliseconds
+
+    // Play a sound
+    const { sound } = await Audio.Sound.createAsync(
+      require('../assets/negative_feedback.mp3') // Replace with the correct path to your sound file
+    );
+    setSound(sound);
+    await sound.playAsync();
+  };
+
   const handleStartTask = () => {
+    setTaskStartTime(new Date()); // Record the start time of the task
     setStep('task');
+  };
+
+  const handleFinish = () => {
+    setStep('questionnaire');
+  };
+
+  // New function to submit the questionnaire data
+  const submitQuestionnaire = async () => {
+    if (stressResponse === null) {
+      Alert.alert('Input Required', 'Please select your stress level.');
+      return;
+    }
+
+    // Prepare the data to be sent
+    const data = {
+      startTime: taskStartTime,
+      results: results,
+      stressResponse: stressResponse,
+    };
+    console.log(data)
+    try {
+      // Replace 'your_api_endpoint' with the actual API endpoint
+      const response = await fetch('your_api_endpoint', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (response.ok) {
+        Alert.alert('Thank you', 'Your responses have been submitted.');
+        // Reset the app or navigate to another screen as needed
+        setStep('introduction');
+        setConditionIndex(0);
+        setDifficultyIndex(0);
+        setTrialIndex(0);
+        setEquationIndex(0);
+        setProblems([]);
+        setResults([]);
+        setStressResponse(null);
+        setTaskStartTime(null);
+      } else {
+        Alert.alert('Submission Failed', 'Please try again later.');
+      }
+    } catch (error) {
+      console.error(error);
+      Alert.alert('An error occurred', 'Please try again later.');
+    }
   };
 
   return (
@@ -685,7 +1032,8 @@ export default function MISTScreen() {
         <View style={styles.content}>
           <Text style={styles.title}>MIST Task (Mental Arithmetic)</Text>
           <Text style={styles.description}>
-            You will be presented with arithmetic problems. Solve each as quickly and accurately as possible without using a calculator.
+            You will be presented with arithmetic problems of varying difficulties. Solve each as
+            quickly and accurately as possible without using a calculator.
           </Text>
           <TouchableOpacity style={styles.button} onPress={handleStartTask}>
             <Text style={styles.buttonText}>Start Task</Text>
@@ -698,11 +1046,23 @@ export default function MISTScreen() {
           style={styles.content}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
+          <Text style={styles.conditionText}>
+            Condition:{' '}
+            {conditions[conditionIndex] === 'withoutTimeConstraints'
+              ? 'No Time Constraints'
+              : 'Time Constraints'}
+          </Text>
+          <Text style={styles.difficultyText}>
+            Difficulty Level:{' '}
+            {difficulties[difficultyIndex].charAt(0).toUpperCase() +
+              difficulties[difficultyIndex].slice(1)}
+          </Text>
+          <Text style={styles.trialText}>Trial {trialIndex + 1} of 5</Text>
           <Text style={styles.problemText}>{currentProblem.expression}</Text>
           <TextInput
             style={styles.input}
             placeholder="Your Answer"
-            keyboardType="default"
+            keyboardType="numeric"
             autoCorrect={false}
             autoCapitalize="none"
             value={userAnswer}
@@ -712,24 +1072,44 @@ export default function MISTScreen() {
             <Text style={styles.buttonText}>Submit Answer</Text>
           </TouchableOpacity>
           <Text style={styles.progressText}>
-            Problem {problemIndex + 1} of {problems.length}
+            Problem {equationIndex + 1} of {problems.length}
           </Text>
+          {conditions[conditionIndex] === 'withTimeConstraints' && (
+            <Text style={styles.timerText}>Time Remaining: {timeRemaining} seconds</Text>
+          )}
         </KeyboardAvoidingView>
       )}
 
       {step === 'completion' && (
         <View style={styles.content}>
           <Text style={styles.title}>Task Complete</Text>
-          <Text style={styles.description}>
-            Thank you for completing the task. Here is your score:
-          </Text>
-          <Text style={styles.scoreText}>Correct Answers: {score.correct}</Text>
-          <Text style={styles.scoreText}>Incorrect Answers: {score.incorrect}</Text>
-          <TouchableOpacity
-            style={styles.button}
-            onPress={() => Alert.alert('Well Done!', 'You may proceed with the next task.')}
-          >
-            <Text style={styles.buttonText}>Finish</Text>
+          <Text style={styles.description}>Thank you for completing the task.</Text>
+          <TouchableOpacity style={styles.button} onPress={handleFinish}>
+            <Text style={styles.buttonText}>Proceed to Questionnaire</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {step === 'questionnaire' && (
+        <View style={styles.content}>
+          <Text style={styles.title}>Self-Report Measure</Text>
+          <Text style={styles.description}>Please indicate your current level of stress:</Text>
+          <View style={styles.stressLevelContainer}>
+            {[1, 2, 3, 4, 5].map((level) => (
+              <TouchableOpacity
+                key={level}
+                style={[
+                  styles.stressLevelButton,
+                  stressResponse === level && styles.stressLevelButtonSelected,
+                ]}
+                onPress={() => setStressResponse(level)}
+              >
+                <Text style={styles.stressLevelText}>{level}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <TouchableOpacity style={styles.button} onPress={submitQuestionnaire}>
+            <Text style={styles.buttonText}>Submit Questionnaire</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -764,6 +1144,24 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 30,
   },
+  conditionText: {
+    fontSize: 20,
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  difficultyText: {
+    fontSize: 20,
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  trialText: {
+    fontSize: 18,
+    color: '#555',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
   problemText: {
     fontSize: 32,
     fontWeight: 'bold',
@@ -788,11 +1186,32 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 20,
   },
-  scoreText: {
-    fontSize: 22,
-    color: '#333',
+  timerText: {
+    fontSize: 18,
+    color: '#ff0000',
     textAlign: 'center',
-    marginVertical: 10,
+    marginTop: 10,
+  },
+  // Styles for the stress level buttons
+  stressLevelContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginVertical: 20,
+  },
+  stressLevelButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#ccc',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  stressLevelButtonSelected: {
+    backgroundColor: '#4682B4',
+  },
+  stressLevelText: {
+    fontSize: 18,
+    color: '#fff',
   },
   // Button styles
   button: {
@@ -813,6 +1232,7 @@ const styles = StyleSheet.create({
 
 File: /Users/shiyuanduan/Documents/Expo/stressed-out/app/_layout.tsx
 ================================================================================
+// app/_layout.tsx
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
@@ -822,6 +1242,7 @@ import { useEffect } from 'react';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { BLEProvider } from './services/bleServices'; // Import BLEProvider
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -843,13 +1264,15 @@ export default function RootLayout() {
   }
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="+not-found" />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <BLEProvider>
+      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <Stack>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="+not-found" />
+        </Stack>
+        <StatusBar style="auto" />
+      </ThemeProvider>
+    </BLEProvider>
   );
 }
 
@@ -858,12 +1281,12 @@ export default function RootLayout() {
 File: /Users/shiyuanduan/Documents/Expo/stressed-out/app/motor-imagery.js
 ================================================================================
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Alert, Image } from 'react-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function MotorImageryScreen() {
-  const [step, setStep] = useState('introduction'); // 'introduction', 'relaxation', 'preparation', 'squeezing', 'completion'
+  const [step, setStep] = useState('introduction'); // Updated steps
   const [cycleTimeLeft, setCycleTimeLeft] = useState(5); // Time left in the current squeeze/release cycle
   const [totalTimeLeft, setTotalTimeLeft] = useState(60); // Total time left for the squeezing/releasing cycles
   const [isSqueezing, setIsSqueezing] = useState(true); // Indicates whether the participant should be squeezing or releasing
@@ -873,14 +1296,23 @@ export default function MotorImageryScreen() {
 
   // Start the squeezing/releasing cycles
   useEffect(() => {
-    if (step === 'squeezing') {
+    if (step === 'physical_squeezing' || step === 'imagery_squeezing') {
+      let totalTime = step === 'physical_squeezing' ? 60 : 300; // 1 minute for physical, 5 minutes for imagery
+      setTotalTimeLeft(totalTime);
+      setCycleTimeLeft(5);
+      setIsSqueezing(true);
+
       // Start total timer
       totalTimerRef.current = setInterval(() => {
         setTotalTimeLeft((prevTime) => {
           if (prevTime <= 1) {
             clearInterval(totalTimerRef.current);
             clearInterval(cycleTimerRef.current);
-            setStep('completion');
+            if (step === 'physical_squeezing') {
+              setStep('ball_taken');
+            } else {
+              setStep('completion');
+            }
             return 0;
           }
           return prevTime - 1;
@@ -898,7 +1330,7 @@ export default function MotorImageryScreen() {
         });
       }, 1000);
 
-      // Cleanup on unmount
+      // Cleanup on unmount or when step changes
       return () => {
         clearInterval(totalTimerRef.current);
         clearInterval(cycleTimerRef.current);
@@ -936,7 +1368,7 @@ export default function MotorImageryScreen() {
         } catch (error) {
           console.error('Network error:', error);
           Alert.alert('Error', 'Network error occurred while submitting your data.');
-          setStep('relaxation')
+          setStep('relaxation');
         }
         break;
 
@@ -944,7 +1376,13 @@ export default function MotorImageryScreen() {
         setStep('preparation');
         break;
       case 'preparation':
-        setStep('squeezing');
+        setStep('physical_squeezing');
+        break;
+      case 'ball_taken':
+        setStep('imagery_introduction');
+        break;
+      case 'imagery_introduction':
+        setStep('imagery_squeezing');
         break;
       case 'completion':
         // Navigate back or provide additional options
@@ -994,7 +1432,7 @@ export default function MotorImageryScreen() {
         </View>
       )}
 
-      {step === 'squeezing' && (
+      {step === 'physical_squeezing' && (
         <View style={styles.content}>
           <Text style={styles.title}>
             {isSqueezing ? 'Squeeze the Stress Ball' : 'Release the Tension'}
@@ -1008,11 +1446,63 @@ export default function MotorImageryScreen() {
         </View>
       )}
 
+      {step === 'ball_taken' && (
+        <View style={styles.content}>
+          <Text style={styles.title}>Set the Stress Ball Aside</Text>
+          <Text style={styles.description}>
+            Please set the stress ball aside. We will now proceed to the next part of the exercise.
+          </Text>
+          <TouchableOpacity style={styles.button} onPress={handleNextStep}>
+            <Text style={styles.buttonText}>Continue</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {step === 'imagery_introduction' && (
+        <View style={styles.content}>
+          <Text style={styles.title}>Motor Imagery Exercise</Text>
+          <Text style={styles.description}>
+            Now, imagine holding a stress ball in your hand. Visualize it as clearly as possible.
+          </Text>
+          {/* Visual cue, e.g., an image or animation */}
+          {/* Replace with your own image or animation */}
+          <View style={styles.imagePlaceholder}>
+            <Text>Stress Ball Image</Text>
+          </View>
+          <TouchableOpacity style={styles.button} onPress={handleNextStep}>
+            <Text style={styles.buttonText}>Start Imagery Exercise</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {step === 'imagery_squeezing' && (
+        <View style={styles.content}>
+          <Text style={styles.title}>
+            {isSqueezing ? 'Imagine Squeezing the Stress Ball' : 'Imagine Releasing the Tension'}
+          </Text>
+          <Text style={styles.timer}>
+            {cycleTimeLeft} second{cycleTimeLeft !== 1 ? 's' : ''} left
+          </Text>
+          <Text style={styles.totalTimer}>
+            Total Time Left: {totalTimeLeft} second{totalTimeLeft !== 1 ? 's' : ''}
+          </Text>
+          {/* Visual cue, e.g., an image or animation */}
+          {/* Replace with your own image or animation */}
+          <View style={styles.imagePlaceholder}>
+            <Text>Stress Ball Image</Text>
+          </View>
+          {/* Optional guidance or reminders */}
+          <Text style={styles.description}>
+            Keep focusing on the sensation of squeezing and releasing the stress ball in your mind.
+          </Text>
+        </View>
+      )}
+
       {step === 'completion' && (
         <View style={styles.content}>
           <Text style={styles.title}>Task Complete</Text>
           <Text style={styles.description}>
-            Thank you for completing the motor imagery task. You may now set the stress ball aside.
+            Thank you for completing the motor imagery task.
           </Text>
           <TouchableOpacity style={styles.button} onPress={handleNextStep}>
             <Text style={styles.buttonText}>Finish</Text>
@@ -1034,8 +1524,7 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
     alignItems: 'center', // Center horizontally
     paddingHorizontal: 20,
-    marginTop:50,
-    // justifyContent: 'center', // Center vertically
+    marginTop: 50,
   },
   // Text styles
   title: {
@@ -1062,6 +1551,15 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#777',
     textAlign: 'center',
+  },
+  // Image placeholder styles
+  imagePlaceholder: {
+    width: 200,
+    height: 200,
+    backgroundColor: '#ddd',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginVertical: 20,
   },
   // Button styles
   button: {
@@ -1642,6 +2140,54 @@ const styles = StyleSheet.create({
 
 ================================================================================
 
+File: /Users/shiyuanduan/Documents/Expo/stressed-out/app/constants/index.js
+================================================================================
+// app/constants/index.js
+
+export * from './api';
+export * from './ble';
+// Export other constant files as needed
+
+================================================================================
+
+File: /Users/shiyuanduan/Documents/Expo/stressed-out/app/constants/ble.js
+================================================================================
+// app/constants/ble.js
+
+export const BLE_SERVICES = {
+    BATTERY_SERVICE: '0000180F-0000-1000-8000-00805f9b34fb', // Standard Battery Service UUID
+    // Add other service UUIDs as needed
+  };
+  
+  export const BLE_CHARACTERISTICS = {
+    BATTERY_LEVEL: '00002A19-0000-1000-8000-00805f9b34fb', // Standard Battery Level Characteristic UUID
+    NOTIFICATION_CHARACTERISTIC_1: '0000yyyy-0000-1000-8000-00805f9b34fb',
+    NOTIFICATION_CHARACTERISTIC_2: '0000zzzz-0000-1000-8000-00805f9b34fb',
+    // Add more characteristic UUIDs as needed
+  };
+  
+  // If you have multiple notification characteristics, list them in an array
+  export const BLE_NOTIFICATION_CHARACTERISTICS = [
+    BLE_CHARACTERISTICS.NOTIFICATION_CHARACTERISTIC_1,
+    BLE_CHARACTERISTICS.NOTIFICATION_CHARACTERISTIC_2,
+    // Add more as needed
+  ];
+  
+================================================================================
+
+File: /Users/shiyuanduan/Documents/Expo/stressed-out/app/constants/api.js
+================================================================================
+// app/constants/api.js
+
+const API_BASE_URL = 'http://localhost:3000'; // Replace with your actual base URL
+
+export const API_ENDPOINTS = {
+  SUBMIT_DATA: `${API_BASE_URL}/submit`,
+  // Add more endpoints as needed
+};
+
+================================================================================
+
 File: /Users/shiyuanduan/Documents/Expo/stressed-out/app/(tabs)/ParadigmSelectionScreen.js
 ================================================================================
 import React from 'react';
@@ -1791,8 +2337,100 @@ const styles = StyleSheet.create({
 
 ================================================================================
 
+File: /Users/shiyuanduan/Documents/Expo/stressed-out/app/(tabs)/devices.tsx
+================================================================================
+// app/(tabs)/devices.tsx
+import React, { useState } from 'react';
+import { StyleSheet, TouchableOpacity, FlatList, Modal, Text } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import DeviceCard from '../components/DeviceCard';
+import AddDeviceModal from '../components/AddDeviceModal';
+import { useBLE } from '../services/bleServices';
+
+export default function DevicesScreen() {
+  const [modalVisible, setModalVisible] = useState(false);
+  const { connectedDevices } = useBLE(); // Custom hook to manage BLE devices
+
+  const handleAddDevice = () => {
+    setModalVisible(true);
+  };
+
+  // Append an "Add Device" placeholder to the connected devices list
+  const dataWithAddPlaceholder = [
+    ...connectedDevices,
+    { id: 'add_placeholder', isAddPlaceholder: true },
+  ];
+
+  const renderItem = ({ item }) => {
+    if (item.isAddPlaceholder) {
+      return (
+        <TouchableOpacity style={styles.addCard} onPress={handleAddDevice}>
+          <MaterialCommunityIcons name="plus" size={30} color="#fff" />
+          <Text style={styles.addCardText}>Add Device</Text>
+        </TouchableOpacity>
+      );
+    } else {
+      return <DeviceCard device={item} />;
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      {/* Device List with Add Device Placeholder */}
+      <FlatList
+        data={dataWithAddPlaceholder}
+        keyExtractor={(item) => item.id}
+        renderItem={renderItem}
+        contentContainerStyle={styles.listContainer}
+      />
+
+      {/* Add Device Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => {
+          setModalVisible(false);
+        }}
+      >
+        <AddDeviceModal onClose={() => setModalVisible(false)} />
+      </Modal>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+    padding: 16,
+  },
+  listContainer: {
+    paddingBottom: 20, // Ensure content is not hidden behind the tab bar
+  },
+  addCard: {
+    backgroundColor: '#4682B4',
+    paddingVertical: 20,
+    borderRadius: 10,
+    marginBottom: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'column',
+  },
+  addCardText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginTop: 10,
+  },
+});
+
+================================================================================
+
 File: /Users/shiyuanduan/Documents/Expo/stressed-out/app/(tabs)/_layout.tsx
 ================================================================================
+// Add 'devices' to the selections array
 import { Tabs } from 'expo-router';
 import React from 'react';
 import { Platform } from 'react-native';
@@ -1841,6 +2479,14 @@ export default function TabLayout() {
         options={{
           title: 'Paradigm',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="list.bullet" color={color} />,
+        }}
+      />
+      {/* Add the Devices Tab */}
+      <Tabs.Screen
+        name="devices"
+        options={{
+          title: 'Devices',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="bluetooth.connect" color={color} />,
         }}
       />
     </Tabs>
@@ -1993,6 +2639,576 @@ const images = {
 };
 
 export default images;
+
+================================================================================
+
+File: /Users/shiyuanduan/Documents/Expo/stressed-out/app/components/DeviceCard.js
+================================================================================
+// app/components/DeviceCard.js
+import React from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useBLE } from '../services/bleServices';
+
+export default function DeviceCard({ device }) {
+  const { disconnectDevice } = useBLE(); // Access BLE actions
+
+  const handleDisconnect = async () => {
+    const success = await disconnectDevice(device.id);
+    if (success) {
+      Alert.alert('Disconnected', `Successfully disconnected from ${device.name || 'Unnamed Device'}`);
+    } else {
+      Alert.alert('Disconnection Failed', `Failed to disconnect from ${device.name || 'Unnamed Device'}`);
+    }
+  };
+
+  return (
+    <View style={styles.card}>
+      <View style={styles.infoContainer}>
+        <MaterialCommunityIcons name="bluetooth" size={24} color="#4682B4" />
+        <Text style={styles.deviceName}>{device.name || 'Unnamed Device'}</Text>
+      </View>
+      <View style={styles.detailsContainer}>
+        <Text style={styles.detailText}>Battery: {device.batteryLevel || 'N/A'}%</Text>
+        <Text style={styles.detailText}>Unsynced Data: {device.unsyncedData || '0 MB'}</Text>
+      </View>
+      <View style={styles.actionsContainer}>
+        <TouchableOpacity style={styles.recordButton} onPress={() => Alert.alert('Recording', 'Start Recording functionality to be implemented.')}>
+          <Text style={styles.recordButtonText}>Start Recording</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.disconnectButton} onPress={handleDisconnect}>
+          <Text style={styles.disconnectButtonText}>Disconnect</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: '#F0F8FF',
+    padding: 16,
+    borderRadius: 10,
+    marginBottom: 16,
+    elevation: 3, // For Android
+    shadowColor: '#000', // For iOS
+    shadowOffset: { width: 0, height: 2 }, // For iOS
+    shadowOpacity: 0.25, // For iOS
+    shadowRadius: 3.84, // For iOS
+  },
+  infoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  deviceName: {
+    marginLeft: 8,
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  detailsContainer: {
+    marginBottom: 12,
+  },
+  detailText: {
+    fontSize: 14,
+    color: '#555',
+  },
+  actionsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  recordButton: {
+    backgroundColor: '#32CD32',
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    borderRadius: 5,
+  },
+  recordButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  disconnectButton: {
+    backgroundColor: '#FF4500',
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    borderRadius: 5,
+  },
+  disconnectButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+});
+
+================================================================================
+
+File: /Users/shiyuanduan/Documents/Expo/stressed-out/app/components/AddDeviceModal.js
+================================================================================
+// app/components/AddDeviceModal.js
+import React, { useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  FlatList,
+  ActivityIndicator,
+  Alert,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useBLE } from '../services/bleServices';
+
+export default function AddDeviceModal({ onClose }) {
+  const {
+    scanForDevices,
+    availableDevices,
+    connectToDevice,
+    isScanning,
+    connectedDevices,
+  } = useBLE();
+
+  const [connectingDeviceId, setConnectingDeviceId] = useState(null);
+
+  useEffect(() => {
+    scanForDevices();
+
+    return () => {
+      // Cleanup if needed when the modal is closed
+    };
+  }, []);
+
+  const handleConnect = async (device) => {
+    setConnectingDeviceId(device.id);
+    const success = await connectToDevice(device.id);
+    setConnectingDeviceId(null);
+    if (success) {
+      Alert.alert(
+        'Connected',
+        `Successfully connected to ${device.name || 'Unnamed Device'}`
+      );
+      onClose();
+    } else {
+      Alert.alert(
+        'Connection Failed',
+        `Failed to connect to ${device.name || 'Unnamed Device'}`
+      );
+    }
+  };
+
+  const renderItem = ({ item }) => {
+    const isAlreadyConnected = connectedDevices.some((dev) => dev.id === item.id);
+    return (
+      <TouchableOpacity
+        style={styles.deviceItem}
+        onPress={() => handleConnect(item)}
+        disabled={isAlreadyConnected || connectingDeviceId === item.id}
+      >
+        <View style={styles.deviceInfo}>
+          <MaterialCommunityIcons name="bluetooth" size={24} color="#4682B4" />
+          <Text style={styles.deviceName}>{item.name || 'Unnamed Device'}</Text>
+        </View>
+        {isAlreadyConnected ? (
+          <Text style={styles.connectedText}>Connected</Text>
+        ) : connectingDeviceId === item.id ? (
+          <ActivityIndicator size="small" color="#4682B4" />
+        ) : (
+          <Text style={styles.connectText}>Connect</Text>
+        )}
+      </TouchableOpacity>
+    );
+  };
+
+  return (
+    <SafeAreaView style={styles.modalContainer}>
+      <View style={styles.modalContent}>
+        <Text style={styles.modalTitle}>Connect to a Device</Text>
+        {isScanning ? (
+          <ActivityIndicator size="large" color="#4682B4" />
+        ) : availableDevices.length === 0 ? (
+          <Text style={styles.noDevicesText}>No devices found.</Text>
+        ) : (
+          <FlatList
+            data={availableDevices}
+            keyExtractor={(item) => item.id}
+            renderItem={renderItem}
+          />
+        )}
+        <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+          <MaterialCommunityIcons name="close" size={24} color="#fff" />
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '90%',
+    maxHeight: '80%',
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 20,
+    elevation: 5, // For Android
+    shadowColor: '#000', // For iOS
+    shadowOffset: { width: 0, height: 2 }, // For iOS
+    shadowOpacity: 0.25, // For iOS
+    shadowRadius: 3.84, // For iOS
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  deviceItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginVertical: 10,
+  },
+  deviceInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  deviceName: {
+    marginLeft: 10,
+    fontSize: 16,
+    color: '#333',
+  },
+  connectText: {
+    color: '#4682B4',
+    fontWeight: 'bold',
+  },
+  connectedText: {
+    color: '#32CD32',
+    fontWeight: 'bold',
+  },
+  noDevicesText: {
+    textAlign: 'center',
+    color: '#888',
+    marginVertical: 20,
+  },
+  closeButton: {
+    backgroundColor: '#4682B4',
+    padding: 10,
+    borderRadius: 5,
+    alignSelf: 'center',
+    marginTop: 20,
+  },
+});
+
+================================================================================
+
+File: /Users/shiyuanduan/Documents/Expo/stressed-out/app/services/bleServices.js
+================================================================================
+// app/services/bleServices.js
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { Alert, Platform, PermissionsAndroid } from 'react-native';
+import { BleManager } from 'react-native-ble-plx';
+import { EventEmitter } from 'events';
+import { BLE_CHARACTERISTICS } from './ble_characteristics'; // Ensure correct characteristic UUIDs
+
+const BLEContext = createContext();
+
+const BLEServiceUUID = 'A0A43180-96BE-4222-B41E-98EA76B0120C'.toLowerCase();
+class BLEService {
+  constructor() {
+    if (!BLEService.instance) {
+      this.manager = new BleManager();
+      this.emitter = new EventEmitter();
+      this.connectedDevices = [];
+      this.availableDevices = [];
+      this.isScanning = false;
+      this.isDisconnecting = false;
+      BLEService.instance = this;
+
+      // Monitor BleManager state changes
+      this.manager.onStateChange((state) => {
+        console.log('BleManager State:', state);
+        if (state === 'PoweredOn') {
+          // Ready to scan or perform other operations
+        } else {
+          // Handle other states (e.g., PoweredOff)
+          Alert.alert('Bluetooth Off', 'Please turn on Bluetooth to use this feature.');
+        }
+      }, true);
+    }
+    return BLEService.instance;
+  }
+
+  // Request necessary permissions
+  async requestPermissions() {
+    if (Platform.OS === 'android') {
+      const permissions = [
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+        PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+        PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+      ];
+
+      const granted = await PermissionsAndroid.requestMultiple(permissions);
+
+      const allGranted = permissions.every(
+        (perm) => granted[perm] === PermissionsAndroid.RESULTS.GRANTED
+      );
+
+      if (!allGranted) {
+        Alert.alert('Permissions Required', 'Bluetooth permissions are required to use this feature.');
+        return false;
+      }
+    }
+    // iOS permissions are handled by react-native-ble-plx
+    return true;
+  }
+
+  // Start scanning for devices
+  async scanForDevices() {
+    const permission = await this.requestPermissions();
+
+    if (!permission) return;
+
+    this.availableDevices = [];
+    this.isScanning = true;
+    console.log('Starting device scan...');
+
+    this.manager.startDeviceScan(null, null, (error, device) => {
+      if (error) {
+        console.log('Scan Error:', error);
+        Alert.alert('Scan Error', error.message);
+        this.isScanning = false;
+        this.manager.stopDeviceScan();
+        return;
+      }
+
+      // Log all discovered devices
+      // console.log('Discovered Device:', device);
+      // console.log("This line is now printed!");
+
+      // Include all devices, regardless of name
+      if (device) {
+        const exists = this.availableDevices.find((d) => d.id === device.id);
+        if (!exists) {
+          this.availableDevices.push(device);
+          this.emitter.emit('deviceDiscovered', device);
+        }
+      }
+    });
+
+    // Stop scanning after 10 seconds
+    setTimeout(() => {
+      this.manager.stopDeviceScan();
+      this.isScanning = false;
+      console.log('Stopped scanning');
+    }, 10000);
+  }
+
+  // Connect to a device
+  async connectToDevice(deviceId) {
+    try {
+      console.log(`Connecting to device: ${deviceId}`);
+      const device = await this.manager.connectToDevice(deviceId);
+      await device.discoverAllServicesAndCharacteristics();
+      const batteryLevel = await this.readBatteryLevel(device);
+      const unsyncedData = 0; // Dummy data
+
+      const deviceInfo = {
+        id: device.id,
+        name: device.name,
+        batteryLevel,
+        unsyncedData,
+      };
+
+      this.connectedDevices.push(deviceInfo);
+      console.log(`Connected to device: ${device.name || 'Unnamed Device'}`);
+
+      return true;
+    } catch (error) {
+      console.error('Connection Error:', error);
+      Alert.alert('Connection Error', `Failed to connect to device ${deviceId}: ${error.message}`);
+      return false;
+    }
+  }
+
+  // Disconnect from a device
+  async disconnectDevice(deviceId) {
+    if (this.isDisconnecting) {
+      console.log('Already disconnecting.');
+      return false;
+    }
+    this.isDisconnecting = true;
+    try {
+      console.log(`Disconnecting device: ${deviceId}`);
+      await this.manager.cancelDeviceConnection(deviceId);
+      this.connectedDevices = this.connectedDevices.filter((dev) => dev.id !== deviceId);
+      console.log(`Disconnected from device: ${deviceId}`);
+      console.log('Updated Connected Devices:', this.connectedDevices);
+      this.isDisconnecting = false;
+      return true;
+    } catch (error) {
+      console.error('Disconnection Error Details:', error);
+      Alert.alert('Disconnection Error', `Failed to disconnect from device ${deviceId}: ${error.message}`);
+      this.isDisconnecting = false;
+      return false;
+    }
+  }
+
+  // Read Battery Level
+  async readBatteryLevel(device) {
+    try {
+      const services = await device.services();
+      const batteryService = services.find(
+        (service) => service.uuid.toLowerCase() === BLEServiceUUID
+      );
+      console.log('Battery Service:', batteryService);
+      if (!batteryService) {
+        console.log('Battery Service not found');
+        return 'N/A';
+      }
+
+      const characteristics = await batteryService.characteristics();
+      const batteryCharacteristic = characteristics.find(
+        (char) => char.uuid.toLowerCase() === BLE_CHARACTERISTICS.battery
+      );
+
+      if (!batteryCharacteristic) {
+        console.log('Battery Characteristic not found');
+        return 'N/A';
+      }
+
+      const batteryData = await batteryCharacteristic.read();
+      // Decode base64 to binary
+      const batteryBytes = Buffer.from(batteryData.value, 'base64');
+      const batteryLevel = batteryBytes.readUInt8(0); // Battery Level is a single byte
+      console.log(`Battery Level: ${batteryLevel}%`);
+      return batteryLevel;
+    } catch (error) {
+      console.error('Battery Level Read Error:', error);
+      return 'N/A';
+    }
+  }
+
+  // Subscribe to Notifications
+  subscribeToNotifications(deviceId, characteristicUUID, onData) {
+    this.manager.monitorCharacteristicForDevice(
+      deviceId,
+      characteristicUUID,
+      (error, characteristic) => {
+        if (error) {
+          console.error('Notification Error:', error);
+          return;
+        }
+        if (characteristic?.value) {
+          const data = Buffer.from(characteristic.value, 'base64').toString('ascii');
+          onData(data);
+        }
+      }
+    );
+  }
+
+  // Start Recording (Dummy Implementation)
+  startRecording(deviceId) {
+    Alert.alert('Recording Started', `Recording started for device ID: ${deviceId}`);
+    // Implement actual recording logic as needed
+  }
+
+  // Destroy BleManager instance
+  destroy() {
+    this.manager.destroy();
+    BLEService.instance = null;
+  }
+}
+
+const instance = new BLEService();
+Object.freeze(instance);
+
+export const BLEProvider = ({ children }) => {
+  const [availableDevices, setAvailableDevices] = useState([]);
+  const [connectedDevices, setConnectedDevices] = useState([]);
+  const [isScanning, setIsScanning] = useState(false);
+
+  useEffect(() => {
+    // Listen to 'deviceDiscovered' events
+    const onDeviceDiscovered = (device) => {
+      setAvailableDevices((prevDevices) => {
+        const exists = prevDevices.find((d) => d.id === device.id);
+        if (!exists) {
+          return [...prevDevices, device];
+        }
+        return prevDevices;
+      });
+    };
+
+    instance.emitter.on('deviceDiscovered', onDeviceDiscovered);
+
+    return () => {
+      instance.emitter.off('deviceDiscovered', onDeviceDiscovered);
+      instance.destroy(); // Ensure BleManager is destroyed when provider unmounts
+    };
+  }, []);
+
+  useEffect(() => {
+    // Update connectedDevices state whenever instance.connectedDevices changes
+    setConnectedDevices([...instance.connectedDevices]);
+  }, [instance.connectedDevices]);
+
+  return (
+    <BLEContext.Provider
+      value={{
+        scanForDevices: async () => {
+          await instance.scanForDevices();
+          setIsScanning(instance.isScanning);
+        },
+        availableDevices,
+        connectToDevice: async (deviceId) => {
+          const success = await instance.connectToDevice(deviceId);
+          if (success) {
+            setConnectedDevices([...instance.connectedDevices]);
+          }
+          return success;
+        },
+        disconnectDevice: async (deviceId) => {
+          const success = await instance.disconnectDevice(deviceId);
+          if (success) {
+            setConnectedDevices([...instance.connectedDevices]);
+          }
+          return success;
+        },
+        isScanning,
+        connectedDevices,
+        startRecording: (deviceId) => instance.startRecording(deviceId),
+        subscribeToNotifications: (deviceId, characteristicUUID, onData) =>
+          instance.subscribeToNotifications(deviceId, characteristicUUID, onData),
+      }}
+    >
+      {children}
+    </BLEContext.Provider>
+  );
+};
+
+export const useBLE = () => {
+  return useContext(BLEContext);
+};
+
+================================================================================
+
+File: /Users/shiyuanduan/Documents/Expo/stressed-out/app/services/ble_characteristics.js
+================================================================================
+// app/services/ble_characteristics.js
+
+export const BLE_CHARACTERISTICS = {
+  battery: 'A0A43197-96BE-4222-B41E-98EA76B0120C', // Battery Level
+  sensorSwitch: 'A0A43193-96BE-4222-B41E-98EA76B0120C', // Sensor Switch
+  readData: 'A0A4319F-96BE-4222-B41E-98EA76B0120C', // Read Data
+  // Add other characteristics as needed
+};
 
 ================================================================================
 
